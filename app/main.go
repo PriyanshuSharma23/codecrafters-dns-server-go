@@ -7,6 +7,10 @@ import (
 	"strings"
 )
 
+type Message struct {
+	Header Header
+}
+
 // header stucture
 /*
    	                              1  1  1  1  1  1
@@ -25,7 +29,7 @@ import (
    |                    ARCOUNT                    |
    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
 */
-type DNSHeader struct {
+type Header struct {
 	ID      uint16
 	FLAGS   uint16
 	QDCOUNT uint16
@@ -34,21 +38,17 @@ type DNSHeader struct {
 	ARCOUNT uint16
 }
 
-type Message struct {
-	Header DNSHeader
-}
-
-func newDNSHeader() *DNSHeader {
-	return &DNSHeader{
+func newHeader() *Header {
+	return &Header{
 		ID:      1234,
 		FLAGS:   0b1000000000000000,
 		QDCOUNT: 1,
-		ANCOUNT: 0,
+		ANCOUNT: 1,
 		NSCOUNT: 0,
 		ARCOUNT: 0,
 	}
 }
-func (h *DNSHeader) toBytes() []byte {
+func (h *Header) toBytes() []byte {
 
 	buf := make([]byte, 12)
 
@@ -74,37 +74,114 @@ func (h *DNSHeader) toBytes() []byte {
 //     |                     QCLASS                    |
 //     +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
 
-type DNSQuestion struct {
-	QNAME  []byte
-	QTYPE  uint16
-	QCLASS uint16
-}
-
-func newDNSQuestion() *DNSQuestion {
-	buf := make([]byte, 0, 4)
-	for _, part := range strings.Split("codecrafters.io", ".") {
+func labelEncoder(s string) []byte {
+	buf := make([]byte, 0)
+	for _, part := range strings.Split(s, ".") {
 		buf = append(buf, byte(len(part)))
 		buf = append(buf, part...)
 	}
 	buf = append(buf, '\x00')
+	return buf
+}
 
-	return &DNSQuestion{
-		QNAME:  buf,
+type Question struct {
+	QNAME  string
+	QTYPE  uint16
+	QCLASS uint16
+}
+
+func newQuestion() *Question {
+	return &Question{
+		QNAME:  "codecrafters.io",
 		QTYPE:  1,
 		QCLASS: 1,
 	}
 }
 
-func (q *DNSQuestion) toBytes() []byte {
-	buf := make([]byte, len(q.QNAME)+4) // 4 => 2 bytes qclass 2bytes qtype
-	l := len(q.QNAME)
+func (q *Question) toBytes() []byte {
+	buf := make([]byte, 0, len(q.QNAME)+4) // 4 => 2 bytes qclass 2bytes qtype
+	buf = append(buf, labelEncoder(q.QNAME)...)
 
-	for i, b := range q.QNAME {
-		buf[i] = b
+	buf = binary.BigEndian.AppendUint16(buf, q.QTYPE)
+	buf = binary.BigEndian.AppendUint16(buf, q.QCLASS)
+
+	return buf
+}
+
+//                                    1  1  1  1  1  1
+//      0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+//    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+//    |                                               |
+//    /                                               /
+//    /                      NAME                     /
+//    |                                               |
+//    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+//    |                      TYPE                     |
+//    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+//    |                     CLASS                     |
+//    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+//    |                      TTL                      |
+//    |                                               |
+//    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+//    |                   RDLENGTH                    |
+//    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--|
+//    /                     RDATA                     /
+//    /                                               /
+//    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+
+type ResourceRecord struct {
+	NAME     string
+	TYPE     uint16
+	CLASS    uint16
+	TTL      uint16
+	RDLENGTH uint16
+	RDATA    []byte
+}
+
+// func newResourceRecord() *ResourceRecord {
+// 	return &ResourceRecord{
+// 		NAME:     "codecrafters.io",
+// 		TYPE:     1,
+// 		CLASS:    1,
+// 		TTL:      60,
+// 		RDLENGTH: 4,
+// 		RDATA:    []byte{8, 8, 8, 8},
+// 	}
+// }
+
+func (rr *ResourceRecord) toBytes() []byte {
+	buf := make([]byte, 0)
+
+	buf = append(buf, labelEncoder(rr.NAME)...)
+	buf = binary.BigEndian.AppendUint16(buf, rr.TYPE)
+	buf = binary.BigEndian.AppendUint16(buf, rr.CLASS)
+	buf = binary.BigEndian.AppendUint16(buf, rr.TTL)
+	buf = binary.BigEndian.AppendUint16(buf, rr.RDLENGTH)
+	buf = append(buf, rr.RDATA...)
+
+	return buf
+}
+
+type Answer []ResourceRecord
+
+func newAnswer() *Answer {
+	return &Answer{
+		ResourceRecord{
+			NAME:     "codecrafters.io",
+			TYPE:     1,
+			CLASS:    1,
+			TTL:      60,
+			RDLENGTH: 4,
+			RDATA:    []byte{8, 8, 8, 8},
+		},
 	}
-	binary.BigEndian.PutUint16(buf[l:l+2], q.QTYPE)
-	binary.BigEndian.PutUint16(buf[l+2:l+4], q.QTYPE)
+}
 
+func (a *Answer) toBytes() []byte {
+	buf := make([]byte, 0)
+	for _, rr := range *a {
+		buf = append(buf, rr.toBytes()...)
+	}
 	return buf
 }
 
@@ -139,10 +216,14 @@ func main() {
 
 		// Create an empty response
 		response := make([]byte, 0)
-		header := newDNSHeader()
+		header := newHeader()
 		response = header.toBytes()
-		question := newDNSQuestion()
+
+		question := newQuestion()
 		response = append(response, question.toBytes()...)
+
+		answer := newAnswer()
+		response = append(response, answer.toBytes()...)
 
 		_, err = udpConn.WriteToUDP(response, source)
 		if err != nil {
