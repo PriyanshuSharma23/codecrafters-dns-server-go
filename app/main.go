@@ -38,6 +38,17 @@ type Header struct {
 	ARCOUNT uint16
 }
 
+// func newHeader() *Header {
+// 	return &Header{
+// 		ID:      1234,
+// 		FLAGS:   0b1000000000000000,
+// 		QDCOUNT: 1,
+// 		ANCOUNT: 0,
+// 		NSCOUNT: 0,
+// 		ARCOUNT: 0,
+// 	}
+// }
+
 func newHeader() *Header {
 	return &Header{
 		ID:      1234,
@@ -48,6 +59,7 @@ func newHeader() *Header {
 		ARCOUNT: 0,
 	}
 }
+
 func (h *Header) toBytes() []byte {
 
 	buf := make([]byte, 12)
@@ -62,17 +74,25 @@ func (h *Header) toBytes() []byte {
 	return buf
 }
 
-//                                     1  1  1  1  1  1
-//       0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
-//     +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
-//     |                                               |
-//     /                     QNAME                     /
-//     /                                               /
-//     +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
-//     |                     QTYPE                     |
-//     +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
-//     |                     QCLASS                    |
-//     +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+/*
+	                              1  1  1  1  1  1
+	0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+
++--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+|                                               |
+/                     QNAME                     /
+/                                               /
++--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+|                     QTYPE                     |
++--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+|                     QCLASS                    |
++--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+*/
+type Question struct {
+	QNAME  string
+	QTYPE  uint16
+	QCLASS uint16
+}
 
 func labelEncoder(s string) []byte {
 	buf := make([]byte, 0)
@@ -82,12 +102,6 @@ func labelEncoder(s string) []byte {
 	}
 	buf = append(buf, '\x00')
 	return buf
-}
-
-type Question struct {
-	QNAME  string
-	QTYPE  uint16
-	QCLASS uint16
 }
 
 func newQuestion() *Question {
