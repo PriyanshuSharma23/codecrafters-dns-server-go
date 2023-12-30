@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"strings"
 )
 
 // header stucture
@@ -41,13 +42,12 @@ func newDNSHeader() *DNSHeader {
 	return &DNSHeader{
 		ID:      1234,
 		FLAGS:   0b1000000000000000,
-		QDCOUNT: 0,
+		QDCOUNT: 1,
 		ANCOUNT: 0,
 		NSCOUNT: 0,
 		ARCOUNT: 0,
 	}
 }
-
 func (h *DNSHeader) toBytes() []byte {
 
 	buf := make([]byte, 12)
@@ -58,6 +58,52 @@ func (h *DNSHeader) toBytes() []byte {
 	binary.BigEndian.PutUint16(buf[6:8], h.ANCOUNT)
 	binary.BigEndian.PutUint16(buf[8:10], h.NSCOUNT)
 	binary.BigEndian.PutUint16(buf[10:12], h.ARCOUNT)
+
+	return buf
+}
+
+//                                     1  1  1  1  1  1
+//       0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+//     +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+//     |                                               |
+//     /                     QNAME                     /
+//     /                                               /
+//     +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+//     |                     QTYPE                     |
+//     +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+//     |                     QCLASS                    |
+//     +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+
+type DNSQuestion struct {
+	QNAME  []byte
+	QTYPE  uint16
+	QCLASS uint16
+}
+
+func newDNSQuestion() *DNSQuestion {
+	buf := make([]byte, 0, 4)
+	for _, part := range strings.Split("codecrafters.io", ".") {
+		buf = append(buf, byte(len(part)))
+		buf = append(buf, part...)
+	}
+	buf = append(buf, '\x00')
+
+	return &DNSQuestion{
+		QNAME:  buf,
+		QTYPE:  1,
+		QCLASS: 1,
+	}
+}
+
+func (q *DNSQuestion) toBytes() []byte {
+	buf := make([]byte, len(q.QNAME)+4) // 4 => 2 bytes qclass 2bytes qtype
+	l := len(q.QNAME)
+
+	for i, b := range q.QNAME {
+		buf[i] = b
+	}
+	binary.BigEndian.PutUint16(buf[l:l+2], q.QTYPE)
+	binary.BigEndian.PutUint16(buf[l+2:l+4], q.QTYPE)
 
 	return buf
 }
@@ -92,8 +138,11 @@ func main() {
 		fmt.Printf("Received %d bytes from %s: %s\n", size, source, receivedData)
 
 		// Create an empty response
+		response := make([]byte, 0)
 		header := newDNSHeader()
-		response := header.toBytes()
+		response = header.toBytes()
+		question := newDNSQuestion()
+		response = append(response, question.toBytes()...)
 
 		_, err = udpConn.WriteToUDP(response, source)
 		if err != nil {
