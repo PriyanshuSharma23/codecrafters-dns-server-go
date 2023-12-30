@@ -39,7 +39,7 @@ type Message struct {
 
 func newDNSHeader() *DNSHeader {
 	return &DNSHeader{
-		ID:      1023,
+		ID:      1234,
 		FLAGS:   0b1000000000000000,
 		QDCOUNT: 0,
 		ANCOUNT: 0,
